@@ -1,0 +1,75 @@
+import json
+import urllib.request
+
+# Emprise géographique (Bounding Box) de la Meurthe-et-Moselle (54)
+# Permet de filtrer uniquement les points situés dans le département
+BBOX_54 = {
+    "lat_min": 48.15,
+    "lat_max": 49.50,
+    "lon_min": 5.55,
+    "lon_max": 7.05
+}
+
+def est_dans_le_54(lat, lon):
+    """Vérifie si des coordonnées GPS se trouvent dans les limites du 54."""
+    return (BBOX_54["lat_min"] <= lat <= BBOX_54["lat_max"] and 
+            BBOX_54["lon_min"] <= lon <= BBOX_54["lon_max"])
+
+def generer_geojson_accidents():
+    features = []
+    
+    # URL de démonstration d'un flux d'incidents standardisé 
+    # (Remplacez cette URL par votre endpoint de flux d'alertes ou de données routières)
+    url_flux_trafic = "https://example.com/api/flux-incidents-grand-est.json"
+    
+    try:
+        req = urllib.request.Request(
+            url_flux_trafic, 
+            headers={'User-Agent': 'Mozilla/5.0'}
+        )
+        with urllib.request.urlopen(req) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            
+            # Exemple de traitement des alertes du flux
+            alertes = data.get('alerts', [])
+            
+            for alerte in alertes:
+                # Filtrer uniquement les accidents
+                if alerte.get('type') == 'ACCIDENT':
+                    lat = alerte.get('location', {}).get('y')
+                    lon = alerte.get('location', {}).get('x')
+                    
+                    if lat and lon and est_dans_le_54(lat, lon):
+                        feature = {
+                            "type": "Feature",
+                            "geometry": {
+                                "type": "Point",
+                                "coordinates": [lon, lat]  # GeoJSON utilise [Longitude, Latitude]
+                            },
+                            "properties": {
+                                "title": f"Accident - {alerte.get('subtype', 'Signalé')}",
+                                "description": f"Rue : {alerte.get('street', 'Inconnue')}<br>Ville : Meurthe-et-Moselle",
+                                "marker-symbol": "danger"
+                            }
+                        }
+                        features.append(feature)
+                        
+    except Exception as e:
+        print(f"Erreur lors de la récupération du flux : {e}")
+
+    # Construction du conteneur GeoJSON final
+    geojson_collection = {
+        "type": "FeatureCollection",
+        "features": features
+    }
+    
+    return geojson_collection
+
+# Génération et sauvegarde locale du fichier GeoJSON
+if __name__ == "__main__":
+    resultat_geojson = generer_geojson_accidents()
+    
+    with open('accidents_54.geojson', 'w', encoding='utf-8') as f:
+        json.dump(resultat_geojson, f, ensure_ascii=False, indent=2)
+    
+    print("Fichier 'accidents_54.geojson' généré avec succès pour la Meurthe-et-Moselle.")
